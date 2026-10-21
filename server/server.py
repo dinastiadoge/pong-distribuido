@@ -2,6 +2,7 @@ import asyncio
 import json
 import math
 import os
+import random
 import time
 from http import HTTPStatus
 from pathlib import Path
@@ -22,6 +23,12 @@ INTERVALO_JOGO = 0.02  # 50 atualizações por segundo
 TEMPO_SEM_ENTRADA = 2.0  # Segundos sem posição recebida antes de pausar
 PAUSA_ENTRE_PARTIDAS = 8.0  # Segundos mostrando o vencedor antes de recomeçar
 
+# Velocidades em pixels por atualização (50 atualizações/s).
+VELOCIDADE_INICIAL = 3.0
+VELOCIDADE_MAX = 6.5
+ACELERACAO_REBATIDA = 1.06  # a bola acelera 6% a cada rebatida
+ANGULO_MAX_REBATIDA = 50  # graus; rebater na ponta da raquete desvia mais
+
 jogadores = {
     nome: {
         "ws": None,
@@ -41,8 +48,11 @@ total_visualizadores_desconectados = 0
 
 bola_x = LARGURA / 2
 bola_y = ALTURA / 2
-bola_dx = 5
-bola_dy = 4
+velocidade = VELOCIDADE_INICIAL
+bola_dx = VELOCIDADE_INICIAL * 0.9
+bola_dy = VELOCIDADE_INICIAL * 0.4
+rebatidas = 0
+ultima_rebatida = None
 pontos_p1 = 0
 pontos_p2 = 0
 vencedor = None
@@ -63,13 +73,39 @@ def jogador_ativo(nome, instante):
     )
 
 
+def direcionar_bola(sentido, angulo_graus):
+    """Aponta a bola para a direita (+1) ou esquerda (-1) no ângulo dado,
+    mantendo a velocidade atual."""
+    global bola_dx, bola_dy
+
+    angulo = math.radians(angulo_graus)
+    bola_dx = sentido * velocidade * math.cos(angulo)
+    bola_dy = velocidade * math.sin(angulo)
+
+
 def reiniciar_bola():
-    global bola_x, bola_y, bola_dx, bola_dy
+    global bola_x, bola_y, velocidade
 
     bola_x = LARGURA / 2
     bola_y = ALTURA / 2
-    bola_dx = -bola_dx
-    bola_dy = 4 if bola_dy >= 0 else -4
+    velocidade = VELOCIDADE_INICIAL
+    # Saque em ângulo sorteado, para a trajetória não se repetir.
+    angulo = random.choice((-1, 1)) * random.uniform(10, 35)
+    direcionar_bola(-1 if bola_dx >= 0 else 1, angulo)
+
+
+def rebater(sentido, topo_raquete, jogador):
+    """Rebatida: o ângulo depende de onde a bola acerta a raquete
+    (centro = reto, pontas = diagonal) e a bola acelera um pouco."""
+    global velocidade, rebatidas, ultima_rebatida
+
+    meio = ALTURA_RAQUETE / 2
+    deslocamento = (bola_y - (topo_raquete + meio)) / meio
+    deslocamento = max(-1.0, min(1.0, deslocamento))
+    velocidade = min(velocidade * ACELERACAO_REBATIDA, VELOCIDADE_MAX)
+    direcionar_bola(sentido, deslocamento * ANGULO_MAX_REBATIDA)
+    rebatidas += 1
+    ultima_rebatida = jogador
 
 
 def nova_partida():
@@ -128,7 +164,7 @@ def atualizar_fisica():
         and topo_p1 <= bola_y <= topo_p1 + ALTURA_RAQUETE
     ):
         bola_x = 50 + RAIO_BOLA
-        bola_dx = abs(bola_dx)
+        rebater(1, topo_p1, "player1")
 
     elif (
         bola_dx > 0
@@ -137,7 +173,7 @@ def atualizar_fisica():
         and topo_p2 <= bola_y <= topo_p2 + ALTURA_RAQUETE
     ):
         bola_x = 550 - RAIO_BOLA
-        bola_dx = -abs(bola_dx)
+        rebater(-1, topo_p2, "player2")
 
     if bola_x + RAIO_BOLA < 0:
         pontos_p2 += 1
@@ -170,6 +206,9 @@ def criar_estado():
             "x": bola_x,
             "y": bola_y,
             "radius": RAIO_BOLA,
+            "speed": velocidade,
+            "hits": rebatidas,
+            "last_hit": ultima_rebatida,
             "visible": vencedor is None,
         },
         "players": {

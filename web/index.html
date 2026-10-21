@@ -33,7 +33,18 @@
     const protocolo = location.protocol === "https:" ? "wss://" : "ws://";
     const endereco = protocolo + location.host + "/ws/viewer";
 
+    // Efeitos puramente visuais: o estado do jogo continua no servidor.
+    const rastro = [];
+    let ultimasRebatidas = null;
+    const flash = { player1: 0, player2: 0 };
+
     function desenhar(estado) {
+      if (ultimasRebatidas !== null && estado.ball.hits !== ultimasRebatidas
+          && estado.ball.last_hit) {
+        flash[estado.ball.last_hit] = 1;
+      }
+      ultimasRebatidas = estado.ball.hits;
+
       ctx.fillStyle = "#111";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -49,17 +60,48 @@
         const jogador = estado.players[nome];
         const topo = jogador.position * 300;
         ctx.fillStyle = jogador.active ? cor : "#666";
+        ctx.shadowColor = cor;
+        ctx.shadowBlur = 25 * flash[nome];
         ctx.fillRect(x, topo, 20, 100);
+        ctx.shadowBlur = 0;
+        flash[nome] = Math.max(0, flash[nome] - 0.08);
       }
 
       raquete("player1", 30, "#00ff66");
       raquete("player2", 550, "#ff0066");
 
       if (estado.ball.visible) {
-        ctx.fillStyle = "#fff";
+        // Quanto mais rápida, mais "quente": branco -> laranja -> vermelho.
+        const calor = Math.min(1, Math.max(0,
+          (estado.ball.speed - 3) / (6.5 - 3)));
+        const cor = `hsl(${55 - 55 * calor}, 100%, ${95 - 40 * calor}%)`;
+
+        const anterior = rastro[rastro.length - 1];
+        if (anterior && Math.hypot(estado.ball.x - anterior.x,
+                                   estado.ball.y - anterior.y) > 30) {
+          rastro.length = 0;  // saque: a bola reapareceu no centro
+        }
+        rastro.push({ x: estado.ball.x, y: estado.ball.y });
+        if (rastro.length > 12) rastro.shift();
+        rastro.forEach((p, i) => {
+          const t = (i + 1) / rastro.length;
+          ctx.globalAlpha = 0.35 * t;
+          ctx.fillStyle = cor;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, estado.ball.radius * t, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        ctx.shadowColor = cor;
+        ctx.shadowBlur = 10 + 20 * calor;
+        ctx.fillStyle = cor;
         ctx.beginPath();
         ctx.arc(estado.ball.x, estado.ball.y, estado.ball.radius, 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
+      } else {
+        rastro.length = 0;
       }
 
       ctx.fillStyle = "#fff";
