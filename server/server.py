@@ -20,6 +20,7 @@ RAIO_BOLA = 10
 LIMITE_PONTOS = 15
 INTERVALO_JOGO = 0.02  # 50 atualizações por segundo
 TEMPO_SEM_ENTRADA = 2.0  # Segundos sem posição recebida antes de pausar
+PAUSA_ENTRE_PARTIDAS = 8.0  # Segundos mostrando o vencedor antes de recomeçar
 
 jogadores = {
     nome: {
@@ -45,6 +46,7 @@ bola_dy = 4
 pontos_p1 = 0
 pontos_p2 = 0
 vencedor = None
+instante_vitoria = 0.0
 numero_estado = 0
 
 
@@ -70,14 +72,38 @@ def reiniciar_bola():
     bola_dy = 4 if bola_dy >= 0 else -4
 
 
+def nova_partida():
+    global pontos_p1, pontos_p2, vencedor
+
+    pontos_p1 = 0
+    pontos_p2 = 0
+    vencedor = None
+    reiniciar_bola()
+    print("[Jogo] Nova partida", flush=True)
+
+
+def registrar_vitoria(nome):
+    global vencedor, instante_vitoria
+
+    vencedor = nome
+    instante_vitoria = time.monotonic()
+    print(f"[Jogo] {nome} venceu; nova partida em {PAUSA_ENTRE_PARTIDAS:.0f} s", flush=True)
+
+
 def atualizar_fisica():
     global bola_x, bola_y, bola_dx, bola_dy
-    global pontos_p1, pontos_p2, vencedor
+    global pontos_p1, pontos_p2
 
     instante = time.monotonic()
 
+    # Fim de partida: mostra o vencedor por um tempo e começa outra.
+    if vencedor is not None:
+        if instante - instante_vitoria >= PAUSA_ENTRE_PARTIDAS:
+            nova_partida()
+        return
+
     # Sem entradas recentes dos dois ESP32, a partida pausa.
-    if vencedor is not None or not all(
+    if not all(
         jogador_ativo(nome, instante) for nome in jogadores
     ):
         return
@@ -116,14 +142,14 @@ def atualizar_fisica():
     if bola_x + RAIO_BOLA < 0:
         pontos_p2 += 1
         if pontos_p2 >= LIMITE_PONTOS:
-            vencedor = "player2"
+            registrar_vitoria("player2")
         else:
             reiniciar_bola()
 
     elif bola_x - RAIO_BOLA > LARGURA:
         pontos_p1 += 1
         if pontos_p1 >= LIMITE_PONTOS:
-            vencedor = "player1"
+            registrar_vitoria("player1")
         else:
             reiniciar_bola()
 
