@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pong Distribuído — Visualizador</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-content: center;
+      gap: 12px;
+      background: #181818;
+      color: white;
+      font: 16px Arial, sans-serif;
+    }
+    canvas { background: #111; max-width: 100%; }
+    #status { min-height: 20px; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="jogo" width="600" height="400"></canvas>
+  <div id="status">Conectando ao servidor...</div>
+
+  <script>
+    const canvas = document.getElementById("jogo");
+    const ctx = canvas.getContext("2d");
+    const status = document.getElementById("status");
+
+    // O navegador é só um espelho: o endereço é o do próprio servidor que
+    // entregou esta página (ws:// em http, wss:// em https).
+    const protocolo = location.protocol === "https:" ? "wss://" : "ws://";
+    const endereco = protocolo + location.host + "/ws/viewer";
+
+    function desenhar(estado) {
+      ctx.fillStyle = "#111";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "#777";
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(300, 0);
+      ctx.lineTo(300, 400);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      function raquete(nome, x, cor) {
+        const jogador = estado.players[nome];
+        const topo = jogador.position * 300;
+        ctx.fillStyle = jogador.active ? cor : "#666";
+        ctx.fillRect(x, topo, 20, 100);
+      }
+
+      raquete("player1", 30, "#00ff66");
+      raquete("player2", 550, "#ff0066");
+
+      if (estado.ball.visible) {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(estado.ball.x, estado.ball.y, estado.ball.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 32px Courier New";
+      ctx.textAlign = "center";
+      ctx.fillText(`${estado.score.player1}   -   ${estado.score.player2}`, 300, 50);
+
+      if (estado.winner) {
+        ctx.fillStyle = "#ffe44d";
+        ctx.font = "bold 32px Courier New";
+        ctx.fillText(
+          estado.winner === "player1" ? "JOGADOR 1 VENCEU!" : "JOGADOR 2 VENCEU!",
+          300, 205
+        );
+      } else if (estado.paused) {
+        ctx.fillStyle = "#ffe44d";
+        ctx.font = "bold 22px Courier New";
+        ctx.fillText("AGUARDANDO OS DOIS JOGADORES", 300, 205);
+      }
+
+      status.textContent =
+        `Estado ${estado.seq} · ` +
+        `P1: ${estado.players.player1.active ? "ativo" : "sem entrada"} · ` +
+        `P2: ${estado.players.player2.active ? "ativo" : "sem entrada"}`;
+    }
+
+    // Reconecta sozinho: fechar e reabrir a página (ou perder a rede) não
+    // afeta a partida, que vive no servidor.
+    function conectar() {
+      const conexao = new WebSocket(endereco);
+
+      conexao.onopen = () => {
+        status.textContent = "Conectado; aguardando estado do servidor.";
+      };
+      conexao.onmessage = (evento) => {
+        try {
+          desenhar(JSON.parse(evento.data));
+        } catch {
+          status.textContent = "Estado recebido em formato inválido.";
+        }
+      };
+      conexao.onclose = () => {
+        status.textContent = "Desconectado; tentando reconectar...";
+        setTimeout(conectar, 2000);
+      };
+    }
+
+    conectar();
+  </script>
+</body>
+</html>

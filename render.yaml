@@ -1,0 +1,12 @@
+# Blueprint do Render. Se o repositório no GitHub tiver a pasta "nuvem" na raiz
+# do projeto, mantenha rootDir. Se o repositório for só o conteúdo de "nuvem",
+# apague a linha rootDir.
+services:
+  - type: web
+    name: pong-distribuido
+    runtime: docker
+    plan: free
+    rootDir: nuvem
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true

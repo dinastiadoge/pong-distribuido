@@ -1,0 +1,16 @@
+[Unit]
+Description=Servidor Pong Distribuido (HTTP + WebSocket)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/pong
+Environment=PORT=8080
+ExecStart=/opt/pong/venv/bin/python -u /opt/pong/server/server.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
