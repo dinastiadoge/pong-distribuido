@@ -13,7 +13,10 @@
 
 // ---------- CONFIGURAÇÃO (único bloco que muda entre as placas/ambientes) ----------
 // TROCAR NO OUTRO ESP32: "player1" <-> "player2" (o path /ws/... acompanha sozinho)
+// (no PlatformIO o valor vem do platformio.ini; o padrão abaixo vale para a Arduino IDE)
+#ifndef PLAYER_ID
 #define PLAYER_ID "player2"
+#endif
 #define WIFI_SSID "POCO X8 Pro"
 #define WIFI_PASSWORD "123456789"
 #define SERVER_HOST "SEU-SERVIDOR.exemplo.com" // domínio ou IP público do servidor na nuvem
